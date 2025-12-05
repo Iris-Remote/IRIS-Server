@@ -3,10 +3,10 @@ IRIS-Server manages all connected IRIS-Agents, handling secure connections and c
 
 
 Search System
-    Accepts json filters
-    
+Accepts json filters
+
 
 Task System    
-    Accepts Client Input and forwards it to the agent
-    Client Requests the result of the task at the server
+Accepts Client Input and forwards it to the agent
+Client Requests the result of the task at the server
 
