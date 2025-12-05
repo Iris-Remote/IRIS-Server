@@ -1,0 +1,174 @@
+📘 IRIS Server API Documentation
+
+All requests require an authentication token:
+
+{
+  "auth": "<AUTHTOKEN>"
+}
+
+
+If the token is invalid, the endpoint returns either "invalid" or 404.
+
+📌 POST /get_result
+
+Retrieve the output of a task that was previously added.
+
+Request Body
+{
+  "auth": "string",
+  "id": "string",
+  "taskid": "string"
+}
+
+Successful Response (200 OK)
+[
+  "result_part_1",
+  "result_part_2"
+]
+
+🧪 Example — CURL
+curl -X POST http://localhost:8080/get_result \
+  -H "Content-Type: application/json" \
+  -d '{
+        "auth": "TOKEN123",
+        "id": "device01",
+        "taskid": "task42"
+      }'
+
+🧪 Example — JavaScript (fetch)
+const res = await fetch("http://localhost:8080/get_result", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+        auth: "TOKEN123",
+        id: "device01",
+        taskid: "task42"
+    })
+});
+
+const data = await res.json();
+console.log("Task Result:", data);
+
+📌 POST /add_command
+
+Add a command/task for a device to execute.
+
+Request Body
+{
+  "auth": "string",
+  "id": "string",
+  "taskid": "string",
+  "command": "string"
+}
+
+Response
+Ok
+
+🧪 Example — CURL
+curl -X POST http://localhost:8080/add_command \
+  -H "Content-Type: application/json" \
+  -d '{
+        "auth": "TOKEN123",
+        "id": "device01",
+        "taskid": "task42",
+        "command": "whoami"
+      }'
+
+🧪 Example — JavaScript
+fetch("http://localhost:8080/add_command", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+        auth: "TOKEN123",
+        id: "device01",
+        taskid: "task42",
+        command: "whoami"
+    })
+})
+.then(res => res.text())
+.then(console.log);
+
+📌 POST /verify
+
+Use this to test whether your authentication token is valid.
+
+Request Body
+{
+  "auth": "string"
+}
+
+Response
+ok
+
+🧪 Example — CURL
+curl -X POST http://localhost:8080/verify \
+  -H "Content-Type: application/json" \
+  -d '{"auth": "TOKEN123"}'
+
+🧪 Example — JavaScript
+const res = await fetch("http://localhost:8080/verify", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ auth: "TOKEN123" })
+});
+
+console.log(await res.text());
+
+📌 POST /search
+
+Search or filter devices stored in DEVICE_LIST.
+
+Supports filters like:
+
+status:"online" username:"admin" os:"windows" latency:">50"
+
+Request Body
+{
+  "auth": "string",
+  "start": 0,
+  "end": 10,
+  "filter": "status:\"online\"",
+  "json": true
+}
+
+Response (JSON mode)
+[
+  {
+    "id": "device1",
+    "hostname": "PC-1",
+    "local_ip": "192.168.0.29",
+    "status": "online",
+    ...
+  }
+]
+
+Response (text mode, json = false)
+PC-1 (192.168.0.29)
+Laptop (192.168.0.55)
+
+🧪 Example — CURL
+curl -X POST http://localhost:8080/search \
+  -H "Content-Type: application/json" \
+  -d '{
+        "auth": "TOKEN123",
+        "start": 0,
+        "end": 20,
+        "filter": "status:\"online\" os:\"windows\"",
+        "json": true
+      }'
+
+🧪 Example — JavaScript
+const res = await fetch("http://localhost:8080/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+        auth: "TOKEN123",
+        start: 0,
+        end: 50,
+        filter: 'status:"online" latency:"<50"',
+        json: true
+    })
+});
+
+const devices = await res.json();
+console.log("Devices:", devices);
