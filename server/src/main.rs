@@ -1,4 +1,28 @@
-use std::ops::Add;
+
+/*               IRIS SERVER                   */
+/*                                        XXX  */
+/*               XXXXXXXXXXX             XXXXX */
+/*          XXXXXXXXXXXXXXXXXXX           XXX  */
+/*        XXXXXXXXXXXXXXXXXXXXXX               */
+/*      XXXXXXXXX           XXXX               */
+/*     XXXXXXX                      XX         */
+/*    XXXXXX                        XXX        */
+/*   XXXXX         XXXXXXX         XXXXX       */
+/*  XXXXX       XXXXXXXXXXXXX       XXXXX      */
+/* XXXXX       XXXXXXXX    XXX       XXXXX     */
+/* XXXXX      XXXXXXXX      XXX      XXXXX     */
+/* XXXXX      XXXXXXXXX    XXXX      XXXXX     */
+/* XXXXX      XXXXXXXXXXXXXXXXX      XXXXX     */
+/* XXXXX       XXXXXXXXXXXXXXX       XXXXX     */
+/*  XXXXX       XXXXXXXXXXXXX       XXXXX      */
+/*   XXXXX         XXXXXXX         XXXXX       */
+/*    XXXXXX                     XXXXXX        */
+/*     XXXXXXX                 XXXXXXX         */
+/*      XXXXXXXXX           XXXXXXXXX          */
+/*        XXXXXXXXXXXXXXXXXXXXXXXXX            */
+/*          XXXXXXXXXXXXXXXXXXXXX              */
+/*               XXXXXXXXXXX                   */
+
 
 
 use tokio::time::{sleep, Duration, Instant};
@@ -15,7 +39,11 @@ use actix_files::NamedFile;
 use actix_web::{get,post};
 
 use once_cell::sync::Lazy;
+
+use crate::stream::insert_query;
 mod crypt;
+mod stream;
+const WSADDR: &str = "127.0.0.1:6061";
 const ENCRYPTKEY: &str = "JoomwAjm33jYi3zQTMAxtoRm6VF2Y0YL";
 const CERTPATH: &str  = "./crt/server.crt";
 const SERVERKEY: &str = "./crt/server.key";
@@ -27,11 +55,12 @@ pub static COMMANDS: Lazy<std::sync::Mutex<Vec<(String,String,String)>>> = Lazy:
 pub static COMMANDS_RESP: Lazy<std::sync::Mutex<Vec<(String,String,String)>>> = Lazy::new(|| std::sync::Mutex::new(Vec::new()));
 
 
-fn generate_key() -> [u8; 32] {
-    let mut key = [0u8; 32];
-    OsRng.try_fill_bytes(&mut key)
-        .expect("OS RNG failure");
-    key
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CreateWS {
+    pub(crate)  auth: String,
+    pub(crate)  id: String,
+    pub(crate)  streamid: String,
+    pub(crate)  stream_mod:String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -80,6 +109,15 @@ pub struct Device {
     pub(crate) uptime:String,
     pub(crate) local_ip: String,
 }
+
+fn generate_key() -> String {
+    let mut key = [0u8; 32];
+    OsRng.try_fill_bytes(&mut key)
+        .expect("OS RNG failure");
+    let rep = base64::encode(&key);
+    return rep;
+}
+
 pub fn gettask(target: String) -> Option<(String,String)> {
     
     let mut list = COMMANDS.lock().unwrap();
@@ -151,7 +189,7 @@ pub fn set_online_list(target: &str) {
     let mut list = ONLINE.lock().unwrap();
     
 
-    if let Some((count, name)) = list.iter_mut().find(|(_, name)| *name == target.to_string()) {
+    if let Some((count, _ )) = list.iter_mut().find(|(_, name)| *name == target.to_string()) {
         *count = 0;
     } else {
         list.push((0,target.to_string()));
@@ -191,6 +229,20 @@ async fn get_result(req:web::Json<GetTaskResu>) -> impl Responder {
         }
         return HttpResponse::Ok().json(result_vec);
     };
+}
+
+
+#[post("/create_ws")]
+async fn create_ws(req:web::Json<CreateWS>) -> impl Responder {
+    if req.auth != AUTHTOKEN{
+        return "invalid".to_string();
+    }
+    else {
+        let session = generate_key();
+        insert_query(req.id.to_string(), req.streamid.to_string(),session.to_string()).await;
+        addtask(req.id.to_string(),format!("stream,{},{}",req.stream_mod,session.to_string()), req.streamid.clone());
+        return session.to_string();
+    }
 }
 #[post("/add_result")]
 async fn add_result(data:String) -> impl Responder {
@@ -380,6 +432,9 @@ async fn main() {
 
     let cert_path = CERTPATH;
     let key_path = SERVERKEY;
+    tokio::spawn(async {
+        let _ = stream::streamingloop(cert_path.to_string(),key_path.to_string(),WSADDR.to_string());
+    });
     println!("server startet waiting for incoming agents");
     tokio::spawn(async {
         let _ = incloop().await; // offline handler
@@ -396,6 +451,7 @@ async fn main() {
             .service(advertise_device)
             .service(add_result)
             .service(get_key)
+            .service(create_ws)
             .service(get_result)
             .default_service( 
             web::route().to(|| async {
