@@ -62,6 +62,11 @@ pub struct CreateWS {
     pub(crate)  streamid: String,
     pub(crate)  stream_mod:String,
 }
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GetDevice {
+    pub(crate)  auth: String,
+    pub(crate)  id: String,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GetTaskResu {
@@ -110,13 +115,15 @@ pub struct Device {
     pub(crate) local_ip: String,
 }
 
+
 fn generate_key() -> String {
-    let mut key = [0u8; 32];
-    OsRng.try_fill_bytes(&mut key)
-        .expect("OS RNG failure");
-    let rep = base64::encode(&key);
-    return rep;
+    let mut rng = rand::thread_rng();
+    let key: String = (0..32)
+        .map(|_| rand::Rng::sample(&mut rng, rand::distr::Alphanumeric) as char)
+        .collect();
+    key
 }
+
 
 pub fn gettask(target: String) -> Option<(String,String)> {
     
@@ -211,6 +218,29 @@ async fn get_key() -> String{
 
     return ENCRYPTKEY.to_string();
 }
+#[post("/get_device")]
+async fn get_device_byid(req:web::Json<GetDevice>) -> impl Responder {
+    if req.auth != AUTHTOKEN{
+        println!("WTF");
+        return HttpResponse::NotFound().body("invalid");
+    }
+    else {
+        let devices = DEVICE_LIST.lock().unwrap();  
+        let mut filtered: Vec<Device> = devices.clone();
+        for dev in filtered{
+            if dev.id == req.id{
+                
+                return HttpResponse::Ok().json(dev);
+            }
+            println!("{:?}", dev.id);
+            println!("{:?}", req.id);
+        }
+
+        return HttpResponse::NotFound().body("invalid");
+    };
+}
+
+
 #[post("/get_result")]
 async fn get_result(req:web::Json<GetTaskResu>) -> impl Responder {
     if req.auth != AUTHTOKEN{
@@ -433,7 +463,7 @@ async fn main() {
     let cert_path = CERTPATH;
     let key_path = SERVERKEY;
     tokio::spawn(async {
-        let _ = stream::streamingloop(cert_path.to_string(),key_path.to_string(),WSADDR.to_string());
+        let _ = stream::streamingloop(cert_path.to_string(),key_path.to_string(),WSADDR.to_string()).await;
     });
     println!("server startet waiting for incoming agents");
     tokio::spawn(async {
@@ -453,6 +483,7 @@ async fn main() {
             .service(get_key)
             .service(create_ws)
             .service(get_result)
+            .service(get_device_byid)
             .default_service( 
             web::route().to(|| async {
                 return "Not Found".to_string();
